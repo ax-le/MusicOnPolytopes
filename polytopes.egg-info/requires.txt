@@ -1,0 +1,7 @@
+madmom
+matplotlib
+mir_eval
+numpy>=1.18.0
+pandas
+scipy>=0.13.0
+soundfile

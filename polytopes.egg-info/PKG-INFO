@@ -1,0 +1,22 @@
+Metadata-Version: 2.1
+Name: polytopes
+Version: 0.1.0
+Summary: Package for polytopes applied on musical segmentation
+Home-page: TODO
+Author: Marmoret Axel
+Author-email: axel.marmoret@irisa.fr
+License: BSD
+Description: # Polytope for music segmentation #
+        
+        TODO.
+        
+Platform: UNKNOWN
+Classifier: License :: OSI Approved :: BSD License
+Classifier: Programming Language :: Python
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: Intended Audience :: Science/Research
+Classifier: Topic :: Multimedia :: Sound/Audio :: Analysis
+Classifier: Programming Language :: Python :: 3.7
+Requires-Python: >=3.7
+Description-Content-Type: text/markdown
