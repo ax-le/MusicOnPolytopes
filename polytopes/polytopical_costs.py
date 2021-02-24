@@ -3,7 +3,14 @@
 Created on Tue Nov 26 14:11:11 2019
 
 @author: amarmore
+
+File containing cost function for polytopes, in the different paradigms.
+In general, cost functions are defined to be computed in a loop (dynamic minimization algorithm),
+and are coded such that they don't have to recompute pattern at each iteration.
+In that sense, they're not defined (or at least, made user-friendly) for computing a cost on a single pattern.
+TODO: maybe define such functions.
 """
+
 import math
 import numpy as np
 
@@ -12,14 +19,6 @@ import polytopes.chord_movement as mvt
 import polytopes.pattern_manip as pm
 import polytopes.pattern_factory as pf
 import polytopes.model.errors as err
-
-"""
-File containing cost function for polytopes, in the different paradigms.
-In general, cost functions are defined to be computed in a loop (dynamic minimization algorithm),
-and are coded such that they don't have to recompute pattern at each iteration.
-In that sense, they're not defined (or at least, made user-friendly) for computing a cost on a single pattern.
-TODO: maybe define such functions.
-"""
 
 # %% Louboutin (and more generally, high-level S&C) pardigm
 def louboutin_cost_for_a_ppp(segment, a_ppp, pattern_of_ones, reindex, current_min = math.inf):
@@ -420,6 +419,60 @@ def voice_leading_cost(first_chord, second_chord, measure = mvt.l1_norm, triadic
     """
     return measure(mvt.triadic_mvt_chords(first_chord, second_chord, chromatic = chromatic))
 
+
+def best_louboutin_cost_segment(segment, irregularity_penalty = 0, target_size = 32, segment_size_penalty = 0):
+    """
+    Compute the optimal cost in the C. Guichaoua's paradigm, for this chord_sequence, among all possible patterns.
+    
+    Disclaimer: This function should be used for tests/demonstration ONLY, as it computes patterns and antecedents/successors when called.
+    Prefer guichaoua_cost() for optimization at a music piece scale.
+    
+    Parameters
+    ----------
+    segment : list of Chords, in any form
+        The segment, on which to compute the cost.
+    positive_penalty, negative_penalty : float/integer, optional
+        Penalty parameter related to irregularities of the polytope.
+        Positive corresponds to the penalty when the polytope contains addition, negative is for deletion.
+        They are constants and not function of the size of irregularities.
+    positive_segment_size_penalty, negative_segment_size_penalty : float/integer, optional
+        Penalty parameter to multiply to the raw penalty score for the size of the segment.
+        positive_segment_size_penalty is the parameter when size exceeds 'target_size', negative is for size shorter than 'target_size'.
+    target_size : integer, optional
+        The optimal size, used for the penalty related to the segment size. 
+        The default is 32.
+
+    Returns
+    -------
+    this_segment_cost : integer
+        Optimal cost for this segment in the C. Guichaoua's paradigm.
+    best_pattern : nested list of integers (indexed pattern)
+        The pattern, resulting in the optimal score.
+    
+    """
+    this_bag = sh.compute_patterns_and_ppp_for_size(len(segment))
+    this_segment_cost = math.inf
+
+    if this_bag == []:
+        return this_segment_cost
+                
+    for a_pattern in this_bag:
+        this_polytope_cost = math.inf
+        for i in range(len(a_pattern[0])):
+            this_ppp_cost = louboutin_cost_for_a_ppp(segment, a_pattern[0][i], a_pattern[3][i], a_pattern[4][i], current_min = this_segment_cost)
+            if this_ppp_cost < this_polytope_cost:
+                this_polytope_cost = this_ppp_cost
+                best_ppp = a_pattern[0][i]
+        
+        this_polytope_cost += irregularities_penalty_guichaoua(adding_code = a_pattern[1], deleting_code = a_pattern[2], positive_penalty = irregularity_penalty, negative_penalty = irregularity_penalty)
+
+        if this_polytope_cost < this_segment_cost:
+            this_segment_cost = this_polytope_cost
+            best_pattern = best_ppp
+            
+    this_segment_cost += sh.penalty_cost_guichaoua(len(segment), target_size = target_size, positive_segment_size_penalty = segment_size_penalty, negative_segment_size_penalty = segment_size_penalty)
+    return this_segment_cost, best_pattern
+
 # %% Guichaoua paradigm
 def guichaoua_cost(chord_sequence, indexed_pattern, antecedents_with_pivots, successors, correct_antecedents, current_min = math.inf):
     """
@@ -606,6 +659,55 @@ def guichaoua_cost_global_antecedents_successors(chord_sequence, indexed_pattern
                                 new_correct_antecedents.append(ant_to_update)
                         correct_antecedents[this_elt_successor] = new_correct_antecedents
     return score
+
+def best_guichaoua_cost_segment(segment, positive_penalty = 0, negative_penalty = 0, target_size = 32, 
+                                positive_segment_size_penalty = 0, negative_segment_size_penalty = 0):
+    """
+    Compute the optimal cost in the C. Guichaoua's paradigm, for this chord_sequence, among all possible patterns.
+    
+    Disclaimer: This function should be used for tests/demonstration ONLY, as it computes patterns and antecedents/successors when called.
+    Prefer guichaoua_cost() for optimization at a music piece scale.
+    
+    Parameters
+    ----------
+    segment : list of Chords, in any form
+        The segment, on which to compute the cost.
+    positive_penalty, negative_penalty : float/integer, optional
+        Penalty parameter related to irregularities of the polytope.
+        Positive corresponds to the penalty when the polytope contains addition, negative is for deletion.
+        They are constants and not function of the size of irregularities.
+    positive_segment_size_penalty, negative_segment_size_penalty : float/integer, optional
+        Penalty parameter to multiply to the raw penalty score for the size of the segment.
+        positive_segment_size_penalty is the parameter when size exceeds 'target_size', negative is for size shorter than 'target_size'.
+    target_size : integer, optional
+        The optimal size, used for the penalty related to the segment size. 
+        The default is 32.
+
+    Returns
+    -------
+    this_segment_cost : integer
+        Optimal cost for this segment in the C. Guichaoua's paradigm.
+    best_pattern : nested list of integers (indexed pattern)
+        The pattern, resulting in the optimal score.
+    
+    """
+    this_bag = sh.compute_patterns_with_antecedents_for_size(len(segment))
+    this_segment_cost = math.inf
+
+    if this_bag == []:
+        print("No polytope for this size: {}".format(len(segment)))
+        return this_segment_cost
+                
+    for a_pattern in this_bag:
+        this_polytope_cost = guichaoua_cost(segment, a_pattern[0], a_pattern[3], a_pattern[4], a_pattern[5], current_min = this_segment_cost)
+            
+        this_polytope_cost += irregularities_penalty_guichaoua(adding_code = a_pattern[1], deleting_code = a_pattern[2], positive_penalty = positive_penalty, negative_penalty = negative_penalty)
+        if this_polytope_cost < this_segment_cost:
+            this_segment_cost = this_polytope_cost
+            best_pattern = a_pattern[0]
+            
+    this_segment_cost += sh.penalty_cost_guichaoua(len(segment), target_size = target_size, positive_segment_size_penalty = positive_segment_size_penalty, negative_segment_size_penalty = negative_segment_size_penalty)
+    return this_segment_cost, best_pattern
 
 # %% New paradigms, developed by A. Marmoret
 def louboutaoua_cost(chord_sequence, indexed_pattern, antecedents_with_pivots, successors, correct_antecedents, direct_antecedents, current_min = math.inf):

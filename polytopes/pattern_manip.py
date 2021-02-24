@@ -32,7 +32,7 @@ import polytopes.data_manipulation as dm
 import polytopes.pattern_factory as pf
 
 # %% Element indexation      
-def get_index_of_element(element, pattern):
+def get_index_from_element(element, pattern):
     """
     Return the index of a specific element 'element' in an indexed pattern.
     
@@ -115,7 +115,7 @@ def recursively_index_element(element, pattern):
         else:
             raise err.ElementNotFound("Element {} not found in the pattern {}.".format(element, pattern))
             
-def get_element_with_index(index_element, pattern, with_tuples = False):
+def get_element_from_index(index_element, pattern, with_tuples = False):
     """
     Return the element in the pattern, from its index.
 
@@ -301,10 +301,10 @@ def get_antecedents_from_element(elt, pattern):
         List of the antecedents, as integers.
 
     """
-    idx_elt = get_index_of_element(elt, pattern)
-    return get_antecedents_from_idx(idx_elt, pattern)
+    idx_elt = get_index_from_element(elt, pattern)
+    return get_antecedents_from_index(idx_elt, pattern)
 
-def get_antecedents_from_idx(idx_elt, pattern):
+def get_antecedents_from_index(idx_elt, pattern):
     """
     Return the antecedents (as elements) of this element (as index) in this indexed pattern.
 
@@ -321,17 +321,17 @@ def get_antecedents_from_idx(idx_elt, pattern):
         List of the antecedents, as integers.
 
     """
-    antecedents = get_antecedents_idx_from_idx(idx_elt)
+    antecedents = get_antecedents_index_from_index(idx_elt)
     if antecedents == []:
         return []
     to_return = []
     for i in antecedents:
-        ant = get_element_with_index(i, pattern, with_tuples = False)
+        ant = get_element_from_index(i, pattern, with_tuples = False)
         if ant != None:
             to_return.append(ant)
     return to_return
     
-def get_antecedents_idx_from_idx(idx_elt):
+def get_antecedents_index_from_index(idx_elt):
     """
     Return the antecedents (as indexes) of this element (as index).
     
@@ -355,7 +355,7 @@ def get_antecedents_idx_from_idx(idx_elt):
     if type(idx[-1]) is tuple:
         if idx[-1][1] == 0:
             idx[-1] = idx[-1][0]
-            return get_antecedents_idx_from_idx(idx)
+            return get_antecedents_index_from_index(idx)
         else:
             # # Without other addition as homologuous
             # idx[-1] = idx[-1][0]
@@ -377,7 +377,7 @@ def get_antecedents_idx_from_idx(idx_elt):
     return antecedents
 
 ######## Pivot related to antecedents
-def get_pivot_from_idx(elt_idx, ant_idx, pattern):
+def get_pivot_from_index(elt_idx, ant_idx, pattern):
     """
     Returns the pivot (as element) of this element (elt_idx, as index)
     in relation with this antecedent (ant_idx, as index) in the pattern.
@@ -397,10 +397,10 @@ def get_pivot_from_idx(elt_idx, ant_idx, pattern):
         The pivot, as element (integer).
 
     """
-    pivot_idx = get_pivot_idx_from_idx(elt_idx, ant_idx)
-    return get_element_with_index(pivot_idx, pattern, with_tuples = False)
+    pivot_idx = get_pivot_index_from_index(elt_idx, ant_idx)
+    return get_element_from_index(pivot_idx, pattern, with_tuples = False)
 
-def get_pivot_idx_from_idx(elt_idx, ant_idx):
+def get_pivot_index_from_index(elt_idx, ant_idx):
     """
     Returns the pivot (as index) of this element (elt_idx, as index) in relation with this antecedent (ant_idx, as index).
 
@@ -438,7 +438,7 @@ def get_pivot_idx_from_idx(elt_idx, ant_idx):
         pivot_idx = [elt_idx[i] - ant_idx[i] for i in range(len(ant_idx))]
     return pivot_idx
 
-def get_antecedents_with_pivots_from_idx(elt_idx, pattern):
+def get_antecedents_with_pivots_from_index(elt_idx, pattern):
     """
     Return a list of tuples (of integers), each tuple corresponding to a couple antecedents/pivot in relation with this antecedent (as elements).
 
@@ -455,22 +455,22 @@ def get_antecedents_with_pivots_from_idx(elt_idx, pattern):
         Couples (antecedents, pivot) for this element.
 
     """
-    antecedents_idx = get_antecedents_idx_from_idx(elt_idx)
+    antecedents_idx = get_antecedents_index_from_index(elt_idx)
     if antecedents_idx == []:
         return []
     else:
         this_elt_ant = []
         for ant_idx in antecedents_idx:
-            ant = get_element_with_index(ant_idx, pattern, with_tuples = False)
+            ant = get_element_from_index(ant_idx, pattern, with_tuples = False)
             if ant != None:
                 if ant == 0:
                     this_elt_ant.append((0,0))
                 else:
-                    pivot = get_pivot_from_idx(elt_idx, ant_idx, pattern)
+                    pivot = get_pivot_from_index(elt_idx, ant_idx, pattern)
                     this_elt_ant.append((ant, pivot))
         return this_elt_ant
     
-def get_global_antecedents_with_pivots_from_idx(elt_idx, pattern):
+def get_global_antecedents_with_pivots_from_index(elt_idx, pattern):
     """
     Return a list of tuples (of integers), each tuple corresponding to a couple GLOBAL antecedents/pivot in relation with this antecedent (as elements).
 
@@ -492,7 +492,7 @@ def get_global_antecedents_with_pivots_from_idx(elt_idx, pattern):
         Couples (global antecedents, pivot) for this element.
 
     """
-    antecedents_idx = get_antecedents_idx_from_idx(elt_idx)
+    antecedents_idx = get_antecedents_index_from_index(elt_idx)
     if antecedents_idx == []:
         return []
     elif [0 for i in range(len(elt_idx))] in antecedents_idx:
@@ -500,16 +500,16 @@ def get_global_antecedents_with_pivots_from_idx(elt_idx, pattern):
     for idx in antecedents_idx: # Antecedents of the antecedents and etc (the ``append'' is taken in account in the for loop, so it searches for the antecedents of the added antecedents)
 
         if idx != [0 for i in range(len(elt_idx))]:
-            for ant_ant in get_antecedents_idx_from_idx(idx):
+            for ant_ant in get_antecedents_index_from_index(idx):
                 if ant_ant not in antecedents_idx:
                     antecedents_idx.append(ant_ant)
     else:
         this_elt_ant = []
         for ant_idx in antecedents_idx:
-            ant = get_element_with_index(ant_idx, pattern, with_tuples = False)
+            ant = get_element_from_index(ant_idx, pattern, with_tuples = False)
             if ant != None and ant != 0:
                 try:
-                    pivot = get_pivot_from_idx(elt_idx, ant_idx, pattern)
+                    pivot = get_pivot_from_index(elt_idx, ant_idx, pattern)
                     if (pivot, ant) not in this_elt_ant:
                         this_elt_ant.append((ant, pivot))
                 except NotImplementedError:
@@ -534,10 +534,10 @@ def get_successors_from_element(elt, pattern):
         The successors of this element (as elements).
 
     """
-    idx_elt = get_index_of_element(elt, pattern)
-    return get_successors_from_idx(idx_elt, pattern)
+    idx_elt = get_index_from_element(elt, pattern)
+    return get_successors_from_index(idx_elt, pattern)
 
-def get_successors_from_idx(idx_elt, pattern):
+def get_successors_from_index(idx_elt, pattern):
     """
     Return the successors (as elements) of this element (as index), subject to this pattern (indexed).
 
@@ -554,17 +554,17 @@ def get_successors_from_idx(idx_elt, pattern):
         The successors of this element (as elements).
 
     """
-    successors = get_successors_idx_from_idx(idx_elt)
+    successors = get_successors_index_from_index(idx_elt)
     if successors == []:
         return []
     to_return = []
     for i in successors:
-        suc = get_element_with_index(i, pattern, with_tuples = False)
+        suc = get_element_from_index(i, pattern, with_tuples = False)
         if suc != None:
             to_return.append(suc)
     return to_return
     
-def get_successors_idx_from_idx(idx_elt):
+def get_successors_index_from_index(idx_elt):
     """
     Return the successors (as indexes) of this element (as index).
     
@@ -590,7 +590,7 @@ def get_successors_idx_from_idx(idx_elt):
     if type(idx[-1]) is tuple:
         if idx[-1][1] == 0:
             idx[-1] = idx[-1][0]
-            successors = get_successors_idx_from_idx(idx)
+            successors = get_successors_index_from_index(idx)
             idx[-1] = (idx[-1], 1)
             successors.append(idx)
             return successors
@@ -611,7 +611,7 @@ def get_successors_idx_from_idx(idx_elt):
             successors.append(new_idx)                
     return successors
 
-def get_global_successors_from_idx(idx_elt, pattern):
+def get_global_successors_from_index(idx_elt, pattern):
     """
     Return the global successors (as elements) of this element (as index).
     
@@ -634,11 +634,11 @@ def get_global_successors_from_idx(idx_elt, pattern):
         The successors of this element (as element).
 
     """
-    successors = get_successors_idx_from_idx(idx_elt) # Direct successors
+    successors = get_successors_index_from_index(idx_elt) # Direct successors
     if successors == []:
         return []
     for idx in successors: # Successors of the successors and etc (the ``append'' is taken in account in the for loop, so it searches for the successors of the added successors)
-        for suc_suc in get_successors_idx_from_idx(idx):
+        for suc_suc in get_successors_index_from_index(idx):
             if suc_suc not in successors:
                 if type(suc_suc[-1]) is not tuple or suc_suc[-1][-1] != 1:
                     successors.append(suc_suc)
@@ -647,7 +647,7 @@ def get_global_successors_from_idx(idx_elt, pattern):
 
     to_return = []
     for i in successors:
-        suc = get_element_with_index(i, pattern, with_tuples = False)
+        suc = get_element_from_index(i, pattern, with_tuples = False)
         if suc != None:
             to_return.append(suc)
     return to_return
@@ -710,8 +710,8 @@ def get_under_primers(pattern):
     """
     under_primers = []
     for i in range(1, pf.get_pattern_size(pattern)):
-        idx_elt = get_index_of_element(i, pattern)
-        if 0 in get_antecedents_from_idx(idx_elt, pattern):
+        idx_elt = get_index_from_element(i, pattern)
+        if 0 in get_antecedents_from_index(idx_elt, pattern):
             under_primers.append(idx_elt)
     return under_primers
 
@@ -815,8 +815,8 @@ def ppp_dim_1_pattern(first_elt_idx, up_idx, pattern):
         A PPP of 1 dimension, composed of 'first_elt_idx' and its successor, determined by the relation between the primer and 'up_idx'.
 
     """
-    first_elt = get_element_with_index(first_elt_idx, pattern, with_tuples = True)
-    snd_elt = get_element_with_index(add_indexes(first_elt_idx, up_idx), pattern, with_tuples = True)
+    first_elt = get_element_from_index(first_elt_idx, pattern, with_tuples = True)
+    snd_elt = get_element_from_index(add_indexes(first_elt_idx, up_idx), pattern, with_tuples = True)
     return [first_elt, snd_elt]
 
 def swap_chord_sequence(chord_sequence, permuted_elements_list):
@@ -892,7 +892,7 @@ def recursively_find_direct_antecedent(i, indexed_pattern):
         The antecedent, or the three elements to construct a system with (as the antecedent will be the fictive element determined by this system).
 
     """
-    elt_idx = get_index_of_element(i, indexed_pattern)
+    elt_idx = get_index_from_element(i, indexed_pattern)
     if type(elt_idx[-1]) is tuple:
         if elt_idx[-1][1] == 1:
             return i-1 # Previous element, on which it is attached
@@ -929,14 +929,14 @@ def recursively_find_direct_antecedent(i, indexed_pattern):
                 primers_pattern = find_primers_of_low_level_systems(indexed_pattern)
                 return recursively_find_direct_antecedent(i, primers_pattern)
             else:
-                return get_element_with_index(elt_minus_up_two_idx, indexed_pattern)
+                return get_element_from_index(elt_minus_up_two_idx, indexed_pattern)
         else:
             if -1 in elt_minus_up_two_idx:
-                return get_element_with_index(elt_minus_up_one_idx, indexed_pattern)
+                return get_element_from_index(elt_minus_up_one_idx, indexed_pattern)
             else:
                 local_primer_idx = [elt_idx[i] - up_one[i] - up_two[i] for i in range(pattern_dim)]
-                local_primer = get_element_with_index(local_primer_idx, indexed_pattern) # a_1
-                elt_minus_up_one = get_element_with_index(elt_minus_up_one_idx, indexed_pattern) # a_2
-                elt_minus_up_two = get_element_with_index(elt_minus_up_two_idx, indexed_pattern) # a_3
+                local_primer = get_element_from_index(local_primer_idx, indexed_pattern) # a_1
+                elt_minus_up_one = get_element_from_index(elt_minus_up_one_idx, indexed_pattern) # a_2
+                elt_minus_up_two = get_element_from_index(elt_minus_up_two_idx, indexed_pattern) # a_3
                 return (local_primer, elt_minus_up_one, elt_minus_up_two)
        

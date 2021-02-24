@@ -206,14 +206,14 @@ def compute_patterns_with_ppp_and_antecedents_for_size(size):
         successors = [[]]
         correct_antecedents = [None]
         for elt in range(1, pf.get_pattern_size(local_pattern)):
-            elt_idx = pm.get_index_of_element(elt, local_pattern)
-            antecedents_and_pivots.append(pm.get_antecedents_with_pivots_from_idx(elt_idx, local_pattern))
+            elt_idx = pm.get_index_from_element(elt, local_pattern)
+            antecedents_and_pivots.append(pm.get_antecedents_with_pivots_from_index(elt_idx, local_pattern))
             this_correct_antecedents = []
-            for ant in pm.get_antecedents_from_idx(elt_idx, local_pattern):
+            for ant in pm.get_antecedents_from_index(elt_idx, local_pattern):
                 if ant != 0:
                     this_correct_antecedents.append(ant)
             correct_antecedents.append(this_correct_antecedents)
-            successors.append(pm.get_successors_from_idx(elt_idx, local_pattern))
+            successors.append(pm.get_successors_from_index(elt_idx, local_pattern))
         to_return.append([all_ppps, add, dele, antecedents_and_pivots, successors, correct_antecedents, bag_of_direct_antecedents])
     return to_return
 
@@ -251,14 +251,14 @@ def compute_patterns_with_antecedents_for_size(size):
         successors = [[]]
         correct_antecedents = [None]
         for elt in range(1, pf.get_pattern_size(local_pattern)):
-            elt_idx = pm.get_index_of_element(elt, local_pattern)
-            antecedents_and_pivots.append(pm.get_antecedents_with_pivots_from_idx(elt_idx, local_pattern))
+            elt_idx = pm.get_index_from_element(elt, local_pattern)
+            antecedents_and_pivots.append(pm.get_antecedents_with_pivots_from_index(elt_idx, local_pattern))
             this_correct_antecedents = []
-            for ant in pm.get_antecedents_from_idx(elt_idx, local_pattern):
+            for ant in pm.get_antecedents_from_index(elt_idx, local_pattern):
                 if ant != 0:
                     this_correct_antecedents.append(ant)
             correct_antecedents.append(this_correct_antecedents)
-            successors.append(pm.get_successors_from_idx(elt_idx, local_pattern))
+            successors.append(pm.get_successors_from_index(elt_idx, local_pattern))
         to_return.append([local_pattern, add, dele, antecedents_and_pivots, successors, correct_antecedents])
     return to_return
 
@@ -296,14 +296,14 @@ def compute_patterns_with_global_antecedents_for_size(size):
         successors = [[]]
         correct_antecedents = [None]
         for elt in range(1, pf.get_pattern_size(local_pattern)):
-            elt_idx = pm.get_index_of_element(elt, local_pattern)
-            antecedents_and_pivots.append(pm.get_global_antecedents_with_pivots_from_idx(elt_idx, local_pattern))
+            elt_idx = pm.get_index_from_element(elt, local_pattern)
+            antecedents_and_pivots.append(pm.get_global_antecedents_with_pivots_from_index(elt_idx, local_pattern))
             this_correct_antecedents = []
             for ant, _ in antecedents_and_pivots[-1]:
                 if ant != 0:
                     this_correct_antecedents.append(ant)
             correct_antecedents.append(this_correct_antecedents)
-            successors.append(pm.get_global_successors_from_idx(elt_idx, local_pattern))
+            successors.append(pm.get_global_successors_from_index(elt_idx, local_pattern))
         to_return.append([local_pattern, add, dele, antecedents_and_pivots, successors, correct_antecedents])
     return to_return
 
