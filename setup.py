@@ -4,14 +4,14 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name="polytopes",
+    name="MusicOnPolytopes",
     version="0.1.0",
     author="Marmoret Axel",
     author_email="axel.marmoret@irisa.fr",
-    description="Package for polytopes applied on musical segmentation",
+    description="Package for polytopic intepretation of music, with application to musical segmentation",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="TODO",    
+    url="https://gitlab.inria.fr/amarmore/musiconpolytopes",    
     packages=setuptools.find_packages(),
     classifiers=[
         "License :: OSI Approved :: BSD License",
@@ -24,13 +24,8 @@ setuptools.setup(
     ],
     license='BSD',
     install_requires=[
-        'madmom',
-        'matplotlib',
         'mir_eval',
-        'numpy >= 1.18.0',
-        'pandas',
-        'scipy >= 0.13.0',
-        'soundfile',
+        'numpy >= 1.18.0'
     ],
     python_requires='>=3.7',
 )
