@@ -13,15 +13,18 @@ TODO: maybe define such functions.
 
 import math
 import numpy as np
+from numba import jit
 
 import polytopes.segmentation_helper as sh
 import polytopes.chord_movement as mvt
 import polytopes.pattern_manip as pm
 import polytopes.pattern_factory as pf
+import polytopes.triad_transformations as tt
 import polytopes.model.errors as err
+import polytopes.accelerated_polytopical_costs as acc_pc
 
 # %% Louboutin (and more generally, high-level S&C) pardigm
-def louboutin_cost_for_a_ppp(segment, a_ppp, pattern_of_ones, reindex, current_min = math.inf):
+def louboutin_cost_for_a_ppp(segment, a_ppp, pattern_of_ones, reindex, current_min = math.inf, relation_type = "triad_circle"):
     """
     Compute the cost in the Louboutin's paradigm, for this segment and this PPP 'a_ppp'.
 
@@ -53,9 +56,9 @@ def louboutin_cost_for_a_ppp(segment, a_ppp, pattern_of_ones, reindex, current_m
     # pattern_made_of_ones = pf.extract_pattern_from_indexed_pattern(a_ppp)
     
     new_segment = pm.swap_chord_sequence(segment, reindex)
-    return polytopic_scale_s_and_c_cost_computation(new_segment, pattern_of_ones, current_min = current_min)
+    return polytopic_scale_s_and_c_cost_computation(new_segment, pattern_of_ones, current_min = current_min, relation_type = relation_type)
 
-def polytopic_scale_s_and_c_cost_computation(symbol_flow, polytope_pattern, extended_s_and_c = False, current_min = math.inf):
+def polytopic_scale_s_and_c_cost_computation(symbol_flow, polytope_pattern, extended_s_and_c = False, current_min = math.inf, relation_type = "triad_circle"):
     """
     Compute the cost of a chord sequence on a polytope, in the Louboutin paradigm (extended by A. Marmoret to irregular polytopes).
 
@@ -84,18 +87,18 @@ def polytopic_scale_s_and_c_cost_computation(symbol_flow, polytope_pattern, exte
     """
     # Global cost means: low systems cost, and computing the cost of the primers.
     if pf.get_pattern_dimension(polytope_pattern) <= 2:
-        return recursive_low_level_splitter_for_s_and_c_cost(symbol_flow, polytope_pattern, extended_s_and_c = extended_s_and_c)
+        return recursive_low_level_splitter_for_s_and_c_cost(symbol_flow, polytope_pattern, extended_s_and_c = extended_s_and_c, relation_type = relation_type)
     else:
-        inner_systems_cost = recursive_low_level_splitter_for_s_and_c_cost(symbol_flow, polytope_pattern, extended_s_and_c = extended_s_and_c)
+        inner_systems_cost = recursive_low_level_splitter_for_s_and_c_cost(symbol_flow, polytope_pattern, extended_s_and_c = extended_s_and_c, relation_type = relation_type)
         if inner_systems_cost > current_min:
             # Cost is already higher than current min, so avoid further computation.
             return math.inf
         primers_chords = recursively_find_primers_chords(symbol_flow, polytope_pattern)
         primer_pattern = extract_pattern_from_primers_chords(primers_chords)
         primer_symbol_flow = pf.flatten_pattern(primers_chords)
-        return inner_systems_cost + polytopic_scale_s_and_c_cost_computation(primer_symbol_flow, primer_pattern, extended_s_and_c = extended_s_and_c)
+        return inner_systems_cost + polytopic_scale_s_and_c_cost_computation(primer_symbol_flow, primer_pattern, extended_s_and_c = extended_s_and_c, relation_type = relation_type)
 
-def recursive_low_level_splitter_for_s_and_c_cost(symbol_flow, polytope_pattern, extended_s_and_c = False):
+def recursive_low_level_splitter_for_s_and_c_cost(symbol_flow, polytope_pattern, extended_s_and_c = False, relation_type = "triad_circle"):
     """
     Split the polytope in a list of dimension 2 polytopes, and compute score on these polytopes, as defined in the Louboutin paradigm, extended by A. Marmoret.
     
@@ -133,19 +136,19 @@ def recursive_low_level_splitter_for_s_and_c_cost(symbol_flow, polytope_pattern,
         if extended_s_and_c:
             return dim_two_extended_s_and_c_cost(symbol_flow, polytope_pattern)
         else:
-            return low_level_system_s_and_c_cost(symbol_flow, polytope_pattern)
+            return low_level_system_s_and_c_cost(symbol_flow, polytope_pattern, relation_type = relation_type)
     else:
         if len(polytope_pattern) == 1:
             first_nested_pattern = polytope_pattern[0]
-            return recursive_low_level_splitter_for_s_and_c_cost(symbol_flow, first_nested_pattern, extended_s_and_c = extended_s_and_c)
+            return recursive_low_level_splitter_for_s_and_c_cost(symbol_flow, first_nested_pattern, extended_s_and_c = extended_s_and_c, relation_type = relation_type)
         else:
             first_nested_pattern = polytope_pattern[0]
-            cost_first_nested_pattern = recursive_low_level_splitter_for_s_and_c_cost(symbol_flow[:pf.get_pattern_size(first_nested_pattern)], first_nested_pattern, extended_s_and_c = extended_s_and_c)
+            cost_first_nested_pattern = recursive_low_level_splitter_for_s_and_c_cost(symbol_flow[:pf.get_pattern_size(first_nested_pattern)], first_nested_pattern, extended_s_and_c = extended_s_and_c, relation_type = relation_type)
             second_nested_pattern = polytope_pattern[1]
-            cost_second_nested_pattern = recursive_low_level_splitter_for_s_and_c_cost(symbol_flow[pf.get_pattern_size(first_nested_pattern):], second_nested_pattern, extended_s_and_c = extended_s_and_c)
+            cost_second_nested_pattern = recursive_low_level_splitter_for_s_and_c_cost(symbol_flow[pf.get_pattern_size(first_nested_pattern):], second_nested_pattern, extended_s_and_c = extended_s_and_c, relation_type = relation_type)
             return cost_first_nested_pattern + cost_second_nested_pattern
 
-def low_level_system_s_and_c_cost(symbol_flow, polytope_pattern):
+def low_level_system_s_and_c_cost(symbol_flow, polytope_pattern, relation_type = "triad_circle"):
     """
     Compute the cost of a low-level system (dimension 2 polytope).
 
@@ -177,7 +180,7 @@ def low_level_system_s_and_c_cost(symbol_flow, polytope_pattern):
         raise err.UnexpectedDimensionForPattern("This pattern is of high dimension (higher than 2), can't compute a cost on it.")
 
     if pattern_size == 2:
-        return voice_leading_cost(symbol_flow[0], symbol_flow[1])
+        return score_relation_switcher(relation_type, symbol_flow[0], symbol_flow[1])
     s_and_c = []
     primer = symbol_flow[0]
     score = 0
@@ -189,27 +192,27 @@ def low_level_system_s_and_c_cost(symbol_flow, polytope_pattern):
             sequence_idx += 2
             
         elif one_dimension_pattern == [1,(1,1)]:
-            score += voice_leading_cost(symbol_flow[sequence_idx + 1], symbol_flow[sequence_idx + 2])
+            score += score_relation_switcher(relation_type, symbol_flow[sequence_idx + 1], symbol_flow[sequence_idx + 2])
             s_and_c.append(symbol_flow[sequence_idx])
             s_and_c.append(symbol_flow[sequence_idx + 1])
             sequence_idx += 3
             
         elif one_dimension_pattern == [(1,1),(1,1)]:
-            score += voice_leading_cost(symbol_flow[sequence_idx],symbol_flow[sequence_idx + 1])
-            score += voice_leading_cost(symbol_flow[sequence_idx + 2],symbol_flow[sequence_idx + 3])
+            score += score_relation_switcher(relation_type, symbol_flow[sequence_idx],symbol_flow[sequence_idx + 1])
+            score += score_relation_switcher(relation_type, symbol_flow[sequence_idx + 2],symbol_flow[sequence_idx + 3])
             s_and_c.append(symbol_flow[sequence_idx])
             s_and_c.append(symbol_flow[sequence_idx + 2])
             sequence_idx += 4
         
         elif one_dimension_pattern == [1]:
             if sequence_idx != 0:
-                score += voice_leading_cost(primer, symbol_flow[sequence_idx])
+                score += score_relation_switcher(relation_type, primer, symbol_flow[sequence_idx])
             sequence_idx += 1
 
         elif one_dimension_pattern == [(1,1)]:
             if sequence_idx != 0:
-                score += voice_leading_cost(primer, symbol_flow[sequence_idx])
-            score += voice_leading_cost(symbol_flow[sequence_idx], symbol_flow[sequence_idx + 1])
+                score += score_relation_switcher(relation_type, primer, symbol_flow[sequence_idx])
+            score += score_relation_switcher(relation_type, symbol_flow[sequence_idx], symbol_flow[sequence_idx + 1])
             sequence_idx += 2
 
         else:
@@ -219,7 +222,7 @@ def low_level_system_s_and_c_cost(symbol_flow, polytope_pattern):
         score += s_and_c_cost(s_and_c)
 
     elif len(s_and_c) == 2:
-        score += voice_leading_cost(s_and_c[0], s_and_c[1])
+        score += score_relation_switcher(relation_type, s_and_c[0], s_and_c[1])
     
     elif len(s_and_c) != 0:
         raise err.PatternToDebugError("Pattern resulting in {}-element S&C, to debug ({})".format(len(s_and_c), str(polytope_pattern)))
@@ -227,133 +230,134 @@ def low_level_system_s_and_c_cost(symbol_flow, polytope_pattern):
     return score
     
 def dim_two_extended_s_and_c_cost(symbol_flow, polytope_pattern):
-    """
-    Compute the cost of a low-level system (dimension 2 polytope), but in a new paradigm.
+    raise err.OutdatedBehaviorException("Extended S&C cost isn't supported anymore.")
+#     """
+#     Compute the cost of a low-level system (dimension 2 polytope), but in a new paradigm.
     
-    This cost function is not promising enough, so it's kind of left here for posterity.
-    TODO: maybe delete it (at least think about it)
+#     This cost function is not promising enough, so it's kind of left here for posterity.
+#     TODO: maybe delete it (at least think about it)
 
-    Parameters
-    ----------
-    symbol_flow : list of Chord, in any form
-        The segment, on which to compute the score.
-    polytope_pattern : nested list of 1
-        The pattern of oness corresponding to the polytope on which to compute the score.
+#     Parameters
+#     ----------
+#     symbol_flow : list of Chord, in any form
+#         The segment, on which to compute the score.
+#     polytope_pattern : nested list of 1
+#         The pattern of oness corresponding to the polytope on which to compute the score.
 
-    Raises
-    ------
-    PatternAndSequenceIncompatible
-        Error raised when the pattern and the sequence are of different sizes.
+#     Raises
+#     ------
+#     PatternAndSequenceIncompatible
+#         Error raised when the pattern and the sequence are of different sizes.
 
-    Returns
-    -------
-    integer (but could be float with other cost functions)
-        Cost of this low-level system (dimension 2 polytope).
+#     Returns
+#     -------
+#     integer (but could be float with other cost functions)
+#         Cost of this low-level system (dimension 2 polytope).
 
-    """
-    # Computing the cost of a dim 2 polytopes in the extended s&c scheme.
-    pattern_size = pf.get_pattern_size(polytope_pattern)
-    if len(symbol_flow) != pattern_size:
-        raise err.PatternAndSequenceIncompatible("The pattern's length is different than the the chord sequence's length, which make them incompatible.") from None
-    if pattern_size < 2:
-        raise err.UnexpectedDim1Pattern("Side effect (pattern of size 1), should it happen ?")
-    if pf.get_pattern_dimension(polytope_pattern) > 2:
-        raise err.UnexpectedDimensionForPattern("This pattern is of high dimension (higher than 2), can't compute a cost on it.")
+#     """
+#     # Computing the cost of a dim 2 polytopes in the extended s&c scheme.
+#     pattern_size = pf.get_pattern_size(polytope_pattern)
+#     if len(symbol_flow) != pattern_size:
+#         raise err.PatternAndSequenceIncompatible("The pattern's length is different than the the chord sequence's length, which make them incompatible.") from None
+#     if pattern_size < 2:
+#         raise err.UnexpectedDim1Pattern("Side effect (pattern of size 1), should it happen ?")
+#     if pf.get_pattern_dimension(polytope_pattern) > 2:
+#         raise err.UnexpectedDimensionForPattern("This pattern is of high dimension (higher than 2), can't compute a cost on it.")
 
-    if pattern_size == 2:
-        return voice_leading_cost(symbol_flow[0], symbol_flow[1])
+#     if pattern_size == 2:
+#         return voice_leading_cost(symbol_flow[0], symbol_flow[1])
     
-    if pf.get_pattern_dimension(polytope_pattern) != 2:
-        raise err.PatternToDebugError("Should be of dimension 2, but is {}" + str(polytope_pattern))
+#     if pf.get_pattern_dimension(polytope_pattern) != 2:
+#         raise err.PatternToDebugError("Should be of dimension 2, but is {}" + str(polytope_pattern))
 
-    if pattern_size == 3:
-        if polytope_pattern == [[1,1],[1]]:
-            return voice_leading_cost(symbol_flow[0], symbol_flow[1]) + voice_leading_cost(symbol_flow[0], symbol_flow[2])
-        elif polytope_pattern == [[1,(1,1)]]:
-            f = mvt.triadic_mvt_chords(symbol_flow[0], symbol_flow[1])            
-            cost = voice_leading_cost(symbol_flow[0], symbol_flow[1])
-            fictive_element = mvt.apply_triadic_mvt(symbol_flow[1], f)
-            cost += voice_leading_cost(fictive_element, symbol_flow[2])
-            return cost
-        else:
-            raise err.PatternToDebugError("Uknonwn pattern: " + str(polytope_pattern))
+#     if pattern_size == 3:
+#         if polytope_pattern == [[1,1],[1]]:
+#             return voice_leading_cost(symbol_flow[0], symbol_flow[1]) + voice_leading_cost(symbol_flow[0], symbol_flow[2])
+#         elif polytope_pattern == [[1,(1,1)]]:
+#             f = mvt.triadic_mvt_chords(symbol_flow[0], symbol_flow[1])            
+#             cost = voice_leading_cost(symbol_flow[0], symbol_flow[1])
+#             fictive_element = mvt.apply_triadic_mvt(symbol_flow[1], f)
+#             cost += voice_leading_cost(fictive_element, symbol_flow[2])
+#             return cost
+#         else:
+#             raise err.PatternToDebugError("Uknonwn pattern: " + str(polytope_pattern))
 
-    if pattern_size == 4:
-        if polytope_pattern == [[1,1],[1,1]]:
-            return s_and_c_cost(symbol_flow)
-        elif polytope_pattern == [[1,(1,1)],[1]]:
-            f = mvt.triadic_mvt_chords(symbol_flow[0], symbol_flow[1])            
-            cost = voice_leading_cost(symbol_flow[0], symbol_flow[1])
-            fictive_element = mvt.apply_triadic_mvt(symbol_flow[1], f)
-            cost += voice_leading_cost(fictive_element, symbol_flow[2])
-            cost += voice_leading_cost(symbol_flow[0], symbol_flow[3])
-            return cost
-        elif polytope_pattern == [[1,1],[(1,1)]]:
-            g = mvt.triadic_mvt_chords(symbol_flow[0], symbol_flow[2])
-            cost = voice_leading_cost(symbol_flow[0], symbol_flow[1])
-            cost = voice_leading_cost(symbol_flow[0], symbol_flow[2])
-            fictive_element = mvt.apply_triadic_mvt(symbol_flow[2], g)
-            cost += voice_leading_cost(fictive_element, symbol_flow[3])
-            return cost
-        else:
-            raise err.PatternToDebugError("Uknonwn pattern: " + str(polytope_pattern))
-    if pattern_size == 5:
-        if polytope_pattern == [[1,1],[1,(1,1)]]:
-            cost = s_and_c_cost(symbol_flow[:4])
-            cost += voice_leading_cost(symbol_flow[3], symbol_flow[4])
-            return cost
-        else:
-            raise err.PatternToDebugError("Uknonwn pattern: " + str(polytope_pattern))
-    if pattern_size == 6:
-        if polytope_pattern == [[1,1],[(1,1),(1,1)]]:
-            cost = voice_leading_cost(symbol_flow[0], symbol_flow[1])
-            cost = voice_leading_cost(symbol_flow[0], symbol_flow[2])
-            f = mvt.triadic_mvt_chords(symbol_flow[0], symbol_flow[2])
-            first_fictive_element = mvt.apply_triadic_mvt(symbol_flow[2], f)
-            cost += voice_leading_cost(first_fictive_element, symbol_flow[3])
+#     if pattern_size == 4:
+#         if polytope_pattern == [[1,1],[1,1]]:
+#             return s_and_c_cost(symbol_flow)
+#         elif polytope_pattern == [[1,(1,1)],[1]]:
+#             f = mvt.triadic_mvt_chords(symbol_flow[0], symbol_flow[1])            
+#             cost = voice_leading_cost(symbol_flow[0], symbol_flow[1])
+#             fictive_element = mvt.apply_triadic_mvt(symbol_flow[1], f)
+#             cost += voice_leading_cost(fictive_element, symbol_flow[2])
+#             cost += voice_leading_cost(symbol_flow[0], symbol_flow[3])
+#             return cost
+#         elif polytope_pattern == [[1,1],[(1,1)]]:
+#             g = mvt.triadic_mvt_chords(symbol_flow[0], symbol_flow[2])
+#             cost = voice_leading_cost(symbol_flow[0], symbol_flow[1])
+#             cost = voice_leading_cost(symbol_flow[0], symbol_flow[2])
+#             fictive_element = mvt.apply_triadic_mvt(symbol_flow[2], g)
+#             cost += voice_leading_cost(fictive_element, symbol_flow[3])
+#             return cost
+#         else:
+#             raise err.PatternToDebugError("Uknonwn pattern: " + str(polytope_pattern))
+#     if pattern_size == 5:
+#         if polytope_pattern == [[1,1],[1,(1,1)]]:
+#             cost = s_and_c_cost(symbol_flow[:4])
+#             cost += voice_leading_cost(symbol_flow[3], symbol_flow[4])
+#             return cost
+#         else:
+#             raise err.PatternToDebugError("Uknonwn pattern: " + str(polytope_pattern))
+#     if pattern_size == 6:
+#         if polytope_pattern == [[1,1],[(1,1),(1,1)]]:
+#             cost = voice_leading_cost(symbol_flow[0], symbol_flow[1])
+#             cost = voice_leading_cost(symbol_flow[0], symbol_flow[2])
+#             f = mvt.triadic_mvt_chords(symbol_flow[0], symbol_flow[2])
+#             first_fictive_element = mvt.apply_triadic_mvt(symbol_flow[2], f)
+#             cost += voice_leading_cost(first_fictive_element, symbol_flow[3])
             
-            snd_fictive_element = mvt.apply_triadic_mvt(symbol_flow[1], f)
-            cost += voice_leading_cost(snd_fictive_element, symbol_flow[4])
+#             snd_fictive_element = mvt.apply_triadic_mvt(symbol_flow[1], f)
+#             cost += voice_leading_cost(snd_fictive_element, symbol_flow[4])
             
-            trd_fictive_element = mvt.apply_triadic_mvt(symbol_flow[4], f)
-            cost += voice_leading_cost(trd_fictive_element, symbol_flow[5])
-            return cost
+#             trd_fictive_element = mvt.apply_triadic_mvt(symbol_flow[4], f)
+#             cost += voice_leading_cost(trd_fictive_element, symbol_flow[5])
+#             return cost
 
-        elif polytope_pattern == [[1,(1,1)],[1,(1,1)]]:
-            f = mvt.triadic_mvt_chords(symbol_flow[0], symbol_flow[1])
-            cost = voice_leading_cost(symbol_flow[0], symbol_flow[1])
-            first_fictive_element = mvt.apply_triadic_mvt(symbol_flow[1], f)
-            cost += voice_leading_cost(first_fictive_element, symbol_flow[2])
+#         elif polytope_pattern == [[1,(1,1)],[1,(1,1)]]:
+#             f = mvt.triadic_mvt_chords(symbol_flow[0], symbol_flow[1])
+#             cost = voice_leading_cost(symbol_flow[0], symbol_flow[1])
+#             first_fictive_element = mvt.apply_triadic_mvt(symbol_flow[1], f)
+#             cost += voice_leading_cost(first_fictive_element, symbol_flow[2])
             
-            cost = voice_leading_cost(symbol_flow[0], symbol_flow[3])
-            snd_fictive_element = mvt.apply_triadic_mvt(symbol_flow[3], f)
-            cost += voice_leading_cost(snd_fictive_element, symbol_flow[4])
+#             cost = voice_leading_cost(symbol_flow[0], symbol_flow[3])
+#             snd_fictive_element = mvt.apply_triadic_mvt(symbol_flow[3], f)
+#             cost += voice_leading_cost(snd_fictive_element, symbol_flow[4])
             
-            trd_fictive_element = mvt.apply_triadic_mvt(symbol_flow[4], f)
-            cost += voice_leading_cost(trd_fictive_element, symbol_flow[5])
-            return cost
+#             trd_fictive_element = mvt.apply_triadic_mvt(symbol_flow[4], f)
+#             cost += voice_leading_cost(trd_fictive_element, symbol_flow[5])
+#             return cost
         
-        elif polytope_pattern == [[(1,1),(1,1)],[(1,1)]]:
-            f = mvt.triadic_mvt_chords(symbol_flow[0], symbol_flow[1])
-            cost = voice_leading_cost(symbol_flow[0], symbol_flow[1])
-            cost = voice_leading_cost(symbol_flow[0], symbol_flow[2])
-            first_fictive_element = mvt.apply_triadic_mvt(symbol_flow[2], f)
-            cost += voice_leading_cost(first_fictive_element, symbol_flow[3])
+#         elif polytope_pattern == [[(1,1),(1,1)],[(1,1)]]:
+#             f = mvt.triadic_mvt_chords(symbol_flow[0], symbol_flow[1])
+#             cost = voice_leading_cost(symbol_flow[0], symbol_flow[1])
+#             cost = voice_leading_cost(symbol_flow[0], symbol_flow[2])
+#             first_fictive_element = mvt.apply_triadic_mvt(symbol_flow[2], f)
+#             cost += voice_leading_cost(first_fictive_element, symbol_flow[3])
             
-            cost = voice_leading_cost(symbol_flow[0], symbol_flow[4])
-            snd_fictive_element = mvt.apply_triadic_mvt(symbol_flow[4], f)
-            cost += voice_leading_cost(snd_fictive_element, symbol_flow[5])
-            return cost
-        else:
-            raise err.PatternToDebugError("Uknonwn pattern: " + str(polytope_pattern))
-    if pattern_size == 8:
-        return polytopic_scale_s_and_c_cost_computation(symbol_flow, pf.make_regular_polytope_pattern(3))
-    else:
-        raise err.PatternToDebugError("Uknonwn pattern size: " + str(polytope_pattern))
+#             cost = voice_leading_cost(symbol_flow[0], symbol_flow[4])
+#             snd_fictive_element = mvt.apply_triadic_mvt(symbol_flow[4], f)
+#             cost += voice_leading_cost(snd_fictive_element, symbol_flow[5])
+#             return cost
+#         else:
+#             raise err.PatternToDebugError("Uknonwn pattern: " + str(polytope_pattern))
+#     if pattern_size == 8:
+#         return polytopic_scale_s_and_c_cost_computation(symbol_flow, pf.make_regular_polytope_pattern(3))
+#     else:
+#         raise err.PatternToDebugError("Uknonwn pattern size: " + str(polytope_pattern))
 
 # %% System and contrast definition
 # Triadic optimization of a System and Contrast
-def s_and_c_cost(four_chords, measure = mvt.l1_norm, chromatic = True):
+def s_and_c_cost(four_chords, relation_type = "triad_circle"):
     """
     Compute the cost of these four chords in the System and Cotnrast paradigm, with the cost function for relation defined in 'measure'.
     
@@ -375,52 +379,52 @@ def s_and_c_cost(four_chords, measure = mvt.l1_norm, chromatic = True):
     cost : integer 
         the cost of this S&C.
     """
-    cost = voice_leading_cost(four_chords[0], four_chords[1], triadic = True, measure = measure, chromatic = chromatic)
-    cost += voice_leading_cost(four_chords[0], four_chords[2], triadic = True, measure = measure, chromatic = chromatic)
-    rel = mvt.triadic_mvt_chords(four_chords[0], four_chords[1])
-    fictive_element = mvt.apply_triadic_mvt(four_chords[2], rel)
-    cost += voice_leading_cost(fictive_element, four_chords[3], triadic = True, measure = measure, chromatic = chromatic)
+    cost = score_relation_switcher(relation_type, four_chords[0], four_chords[1])
+    cost += score_relation_switcher(relation_type,four_chords[0], four_chords[2])
+    rel = find_relation_switcher(relation_type,four_chords[0], four_chords[1])
+    fictive_element = apply_relation_switcher(relation_type,four_chords[2], rel)
+    cost += score_relation_switcher(relation_type,fictive_element, four_chords[3])
     return cost
 
 # Cost function between two chords
-def voice_leading_cost(first_chord, second_chord, measure = mvt.l1_norm, triadic = False, fifth = False, chromatic = True):
-    """
-    Compute the score/cost associated with a voice leading movement between two chords.
+# def voice_leading_cost(first_chord, second_chord, measure = mvt.l1_norm, triadic = False, fifth = False, chromatic = True):
+#     """
+#     Compute the score/cost associated with a voice leading movement between two chords.
     
-    Parameters
-    ----------
-    first_chord, second_chord: Chord objects
-        The chords between which the voice leading is to compute.
-    measure: function of mvt
-        The norm of the relation vector, defining the distance
-        (implemented: l1, l2 and infinite norm).
-        Default: l1_norm
-    triadic: boolean
-        If True, the movement between the chords is computed as a rotation in the circle of triads.
-        If False, the movement is computed in the optimal transport paradigm.
-        Default: False
-    fifth: boolean
-        Only useful if triadic is set to False.
-        If True, the transport between 2 notes is computed as a movement in the circle of fifth,
-        If False, the transport is the difference of the numbers of the notes (second - first).
-        # NB: Optimal transport is not used anymore
-        Default: False.
-    chromatic: boolean
-        Only useful if triadic is set to True.
-        If True, the chords in the circle of triads are ordered in the chromatic order,
-        If False, the chords in the circle of triads are ordered in the 3-5 Torus order.
-        Default: True
+#     Parameters
+#     ----------
+#     first_chord, second_chord: Chord objects
+#         The chords between which the voice leading is to compute.
+#     measure: function of mvt
+#         The norm of the relation vector, defining the distance
+#         (implemented: l1, l2 and infinite norm).
+#         Default: l1_norm
+#     triadic: boolean
+#         If True, the movement between the chords is computed as a rotation in the circle of triads.
+#         If False, the movement is computed in the optimal transport paradigm.
+#         Default: False
+#     fifth: boolean
+#         Only useful if triadic is set to False.
+#         If True, the transport between 2 notes is computed as a movement in the circle of fifth,
+#         If False, the transport is the difference of the numbers of the notes (second - first).
+#         # NB: Optimal transport is not used anymore
+#         Default: False.
+#     chromatic: boolean
+#         Only useful if triadic is set to True.
+#         If True, the chords in the circle of triads are ordered in the chromatic order,
+#         If False, the chords in the circle of triads are ordered in the 3-5 Torus order.
+#         Default: True
         
-    Returns
-    -------
-    integer: 
-        the cost of the voice leading.
+#     Returns
+#     -------
+#     integer: 
+#         the cost of the voice leading.
             
-    """
-    return measure(mvt.triadic_mvt_chords(first_chord, second_chord, chromatic = chromatic))
+#     """
+#     return measure(mvt.triadic_mvt_chords(first_chord, second_chord, chromatic = chromatic))
 
 
-def best_louboutin_cost_segment(segment, irregularity_penalty = 0, target_size = 32, segment_size_penalty = 0):
+def best_louboutin_cost_segment(segment, irregularity_penalty = 0, target_size = 32, segment_size_penalty = 0, relation_type = "triad_circle"):
     """
     Compute the optimal cost in the C. Guichaoua's paradigm, for this chord_sequence, among all possible patterns.
     
@@ -459,7 +463,7 @@ def best_louboutin_cost_segment(segment, irregularity_penalty = 0, target_size =
     for a_pattern in this_bag:
         this_polytope_cost = math.inf
         for i in range(len(a_pattern[0])):
-            this_ppp_cost = louboutin_cost_for_a_ppp(segment, a_pattern[0][i], a_pattern[3][i], a_pattern[4][i], current_min = this_segment_cost)
+            this_ppp_cost = louboutin_cost_for_a_ppp(segment, a_pattern[0][i], a_pattern[3][i], a_pattern[4][i], current_min = this_segment_cost, relation_type = relation_type)
             if this_ppp_cost < this_polytope_cost:
                 this_polytope_cost = this_ppp_cost
                 best_ppp = a_pattern[0][i]
@@ -474,7 +478,7 @@ def best_louboutin_cost_segment(segment, irregularity_penalty = 0, target_size =
     return this_segment_cost, best_pattern
 
 # %% Guichaoua paradigm
-def guichaoua_cost(chord_sequence, indexed_pattern, antecedents_with_pivots, successors, correct_antecedents, current_min = math.inf):
+def guichaoua_cost(chord_sequence, indexed_pattern, antecedents_with_pivots, successors, correct_antecedents, current_min = math.inf, relation_type = "triad_circle"):
     """
     Compute the cost in the C. Guichaoua's paradigm, for this chord_sequence and this 'indexed_pattern'.
     
@@ -532,8 +536,8 @@ def guichaoua_cost(chord_sequence, indexed_pattern, antecedents_with_pivots, suc
                 found = False
                 for ant, piv in this_elt_ant:
                     if ant in correct_antecedents[elt]:
-                        rel = mvt.triadic_mvt_chords(chord_sequence[0], chord_sequence[ant])
-                        if rel == mvt.triadic_mvt_chords(chord_sequence[piv], chord_sequence[elt]):
+                        rel = find_relation_switcher(relation_type, chord_sequence[0], chord_sequence[ant])
+                        if rel == find_relation_switcher(relation_type, chord_sequence[piv], chord_sequence[elt]):
                             found = True
                 if not found:
                     score += 1
@@ -544,7 +548,7 @@ def guichaoua_cost(chord_sequence, indexed_pattern, antecedents_with_pivots, suc
 
     return score
 
-def guichaoua_cost_global_antecedents_successors(chord_sequence, indexed_pattern, antecedents_with_pivots, successors, correct_antecedents, current_min = math.inf):
+def guichaoua_cost_global_antecedents_successors(chord_sequence, indexed_pattern, antecedents_with_pivots, successors, correct_antecedents, current_min = math.inf, relation_type = "triad_circle"):
     """
     Compute the cost in the C. Guichaoua's paradigm, but with antecedents as "global" and not just the ones linked to the element by a direct arrow (original behavior from my point of view).
     
@@ -626,8 +630,8 @@ def guichaoua_cost_global_antecedents_successors(chord_sequence, indexed_pattern
                 found = False
                 for ant, piv in this_elt_ant:
                     if ant in correct_antecedents[elt]:
-                        rel = mvt.triadic_mvt_chords(chord_sequence[0], chord_sequence[ant])
-                        if rel == mvt.triadic_mvt_chords(chord_sequence[piv], chord_sequence[elt]):
+                        rel = find_relation_switcher(relation_type,chord_sequence[0], chord_sequence[ant])
+                        if rel == find_relation_switcher(relation_type,chord_sequence[piv], chord_sequence[elt]):
                             found = True
                 if not found:
                     score += 1
@@ -710,7 +714,7 @@ def best_guichaoua_cost_segment(segment, positive_penalty = 0, negative_penalty 
     return this_segment_cost, best_pattern
 
 # %% New paradigms, developed by A. Marmoret
-def louboutaoua_cost(chord_sequence, indexed_pattern, antecedents_with_pivots, successors, correct_antecedents, direct_antecedents, current_min = math.inf):
+def louboutaoua_cost(chord_sequence, indexed_pattern, antecedents_with_pivots, successors, correct_antecedents, direct_antecedents, current_min = math.inf, relation_type = "triad_circle"):
     """
     Louboutaoua cost (name still pending). Need a reference to be explained.
 
@@ -758,17 +762,17 @@ def louboutaoua_cost(chord_sequence, indexed_pattern, antecedents_with_pivots, s
             raise err.PatternToDebugError("Element with no antecedent: {} in {}. This shouldn't happen a priori.".format(elt, indexed_pattern))
         elif (0,0) in this_elt_ant:
             if chord_sequence[0] != chord_sequence[elt]:
-                score += voice_leading_cost(chord_sequence[0], chord_sequence[elt])
+                score += score_relation_switcher(relation_type, chord_sequence[0], chord_sequence[elt])
         else:
             # If this element doesn't hold valid predecessors.
             if correct_antecedents[elt] == []:
                 direct_ant = direct_antecedents[elt]
                 if type(direct_ant) is tuple: # Antecedent is a fictive element, to construct
-                    f = mvt.triadic_mvt_chords(chord_sequence[direct_ant[0]], chord_sequence[direct_ant[1]])            
-                    fictive_element = mvt.apply_triadic_mvt(chord_sequence[direct_ant[2]], f)
-                    score += voice_leading_cost(fictive_element, chord_sequence[elt])
+                    f = find_relation_switcher(relation_type,chord_sequence[direct_ant[0]], chord_sequence[direct_ant[1]])            
+                    fictive_element = apply_relation_switcher(relation_type,chord_sequence[direct_ant[2]], f)
+                    score += score_relation_switcher(relation_type, fictive_element, chord_sequence[elt])
                 else:
-                    score += voice_leading_cost(chord_sequence[direct_ant], chord_sequence[elt])
+                    score += score_relation_switcher(relation_type,chord_sequence[direct_ant], chord_sequence[elt])
 
                 # Update the correct antecedents of this element' successors
                 for this_elt_successor in successors[elt]:
@@ -780,31 +784,129 @@ def louboutaoua_cost(chord_sequence, indexed_pattern, antecedents_with_pivots, s
                 contrasts = []
                 for ant, piv in this_elt_ant:
                     if ant in correct_antecedents[elt]:
-                        rel = mvt.triadic_mvt_chords(chord_sequence[0], chord_sequence[ant])
-                        fictive = mvt.apply_triadic_mvt(chord_sequence[piv], rel)
-                        gamma = mvt.triadic_mvt_chords(fictive, chord_sequence[elt])
+                        rel = find_relation_switcher(relation_type,chord_sequence[0], chord_sequence[ant])
+                        fictive = apply_relation_switcher(relation_type,chord_sequence[piv], rel)
+                        gamma = find_relation_switcher(relation_type,fictive, chord_sequence[elt])
                         if gamma == 0:
                             found = True
                         else:
                             contrasts.append(gamma)
                 if not found:
                     if len(np.unique(contrasts)) == 1:
-                        score += mvt.l1_norm(contrasts[0])
+                        score += abs(contrasts[0])
                     else:
                         direct_ant = direct_antecedents[elt]
                         if type(direct_ant) is tuple: # Antecedent is a fictive element, to construct
-                            f = mvt.triadic_mvt_chords(chord_sequence[direct_ant[0]], chord_sequence[direct_ant[1]])            
-                            fictive_element = mvt.apply_triadic_mvt(chord_sequence[direct_ant[2]], f)
-                            score += voice_leading_cost(fictive_element, chord_sequence[elt])
+                            f = find_relation_switcher(relation_type,chord_sequence[direct_ant[0]], chord_sequence[direct_ant[1]])            
+                            fictive_element = apply_relation_switcher(relation_type,chord_sequence[direct_ant[2]], f)
+                            score += score_relation_switcher(relation_type,fictive_element, chord_sequence[elt])
                         else:
-                            score += voice_leading_cost(chord_sequence[direct_ant], chord_sequence[elt])
+                            score += score_relation_switcher(relation_type,chord_sequence[direct_ant], chord_sequence[elt])
                     # Update the correct antecedents of this element' successors
                     for this_elt_successor in successors[elt]:
                         correct_antecedents[this_elt_successor] = sh.update_correct_antecedents(elt, antecedents_with_pivots[this_elt_successor], correct_antecedents[this_elt_successor])
 
     return score
 
-def cohen_marmoret_cost(chord_sequence, indexed_pattern, antecedents_with_pivots, current_min = math.inf):
+# def cohen_marmoret_cost(chord_sequence, indexed_pattern, antecedents_with_pivots, current_min = math.inf, relation_type = "triad_circle"):
+#     """
+#     Cohen-Marmoret cost (name still pending). Need a reference to be explained.
+
+#     Parameters
+#     ----------
+#     chord_sequence : list of Chords, in any form
+#         The chord sequence.
+#     indexed_pattern : nested list of integers
+#         The indexed pattern, to compute score on.
+#     antecedents_with_pivots : list of list of tuples (integer, integer)
+#         Antedents with their pivots, for each element.
+#         Given as arguments so as they can be computed once and then feeded when needed in the function (when segmenting a song).
+#         It's an acceleration technique.
+#     current_min : integer, optional
+#         The current minimal cost.
+#         It's an acceleration parameter, to check that the current cost we're computing' isn't already higher than the current minimal value.
+#         If it's the case, this ppp won't be chosen, so we don't need an exact score, and it returns math.inf.
+#         The default is math.inf.
+
+#     Raises
+#     ------
+#     PatternToDebugError
+#         Error raised when an element has no antecedent (which is not normal behavior).
+
+#     Returns
+#     -------
+#     score : integer
+#         Cost of this sequence on this pattern in the Cohen-Marmoret's paradigm.
+
+#     """
+#     print("Should pass through this cost function again, because contrast are all scores now (and not functions). See if it breaks sthg")
+#     score = 1
+#     contrasts = [None for i in range(pf.get_pattern_size(indexed_pattern))]
+#     for elt in range(1, pf.get_pattern_size(indexed_pattern)):
+#         if score > current_min:
+#             return math.inf
+#         this_elt_ant = antecedents_with_pivots[elt]
+#         if len(this_elt_ant) == 2 and (this_elt_ant[0][0], this_elt_ant[0][1]) == (this_elt_ant[1][1], this_elt_ant[1][0]):
+#             this_elt_ant = [this_elt_ant[0]]
+#         if this_elt_ant == []:
+#             raise err.PatternToDebugError("Element with no antecedent: {} in {}. This shouldn't happen a priori.".format(elt, indexed_pattern))
+#         elif (0,0) in this_elt_ant:
+#             if chord_sequence[0] != chord_sequence[elt]:
+#                 score += score_relation_switcher(relation_type, chord_sequence[0], chord_sequence[elt])
+#         else:
+#             # Searching for a valid implication of the current element.
+#             if len(this_elt_ant) == 1:
+#                 ant, piv = this_elt_ant[0]
+#                 rel = find_relation_switcher(relation_type,chord_sequence[0], chord_sequence[ant])
+#                 fictive = apply_relation_switcher(relation_type,chord_sequence[piv], rel)
+#                 #contrast = find_relation_switcher(relation_type, fictive, chord_sequence[elt])
+#                 contrast_score = score_relation_switcher(relation_type,fictive, chord_sequence[elt])
+
+#             elif len(this_elt_ant) == 0:
+#                 raise err.PatternToDebugError("Element with no antecedent: {}, antecedents and pivots for it: {} in {}. This shouldn't happen a priori.".format(elt, this_elt_ant, indexed_pattern))
+#             else:
+#                 contrasts_of_ants = []
+#                 possible_fictive = []
+#                 for ant, piv in this_elt_ant:
+#                     if contrasts[ant] == None:
+#                         raise err.PatternToDebugError("Contrast for the element: {}, hasn't been computed when looping for element: {} in {}. This shouldn't happen a priori.".format(ant, elt, indexed_pattern))
+#                     else:
+#                         contrasts_of_ants.append(contrasts[ant])
+#                         rel = find_relation_switcher(relation_type, chord_sequence[0], chord_sequence[ant])
+#                         fictive = apply_relation_switcher(relation_type, chord_sequence[piv], rel)
+#                         possible_fictive.append(fictive)
+
+#                 if len(np.unique(possible_fictive)) == 1: # No ambiguity
+#                     #contrast = find_relation_switcher(relation_type,possible_fictive[0], chord_sequence[elt])
+#                     contrast_score = score_relation_switcher(relation_type,possible_fictive[0], chord_sequence[elt])
+#                 else:
+#                     the_max = -1
+#                     maximal_contrastic_ants = None
+#                     for idx in range(len(contrasts_of_ants)): # Looping among the antecedents of our current element, and searching for the maximally contrastic one. If they are several, we will evaluate them all.
+#                         absolute_val_contrast = contrasts_of_ants[idx] # Adding a score now, so it will always be positive
+#                         if absolute_val_contrast > the_max: # Higher contrast than the previous ones.
+#                             the_max = absolute_val_contrast
+#                             maximal_contrastic_ants = [idx]
+#                         elif absolute_val_contrast == the_max: # Contrast equal to the max, to evaluate.
+#                             maximal_contrastic_ants.append(idx)
+                            
+#                     min_contrast_score_among_valids = math.inf
+#                     for ant in maximal_contrastic_ants: # Happens that all contrasts are equal, but that they result in different fictive. In that case, we keep the minimal contrast.
+#                         #current_contrast = find_relation_switcher(relation_type, possible_fictive[ant], chord_sequence[elt])
+#                         current_contrast_score = score_relation_switcher(relation_type, possible_fictive[ant], chord_sequence[elt])
+#                         if current_contrast_score < min_contrast_score_among_valids:
+#                             min_contrast_score_among_valids = current_contrast_score
+#                             #min_contrast_among_valids = current_contrast
+#                     if min_contrast_score_among_valids == math.inf:
+#                         raise err.ToDebugException("Infinite contrast.")
+#                     contrast_score = min_contrast_score_among_valids
+                    
+#             contrasts[elt] = contrast_score
+#             score += contrast_score
+
+#     return score
+    
+def cohen_marmoret_cost(chord_sequence, indexed_pattern, antecedents_with_pivots, current_min = math.inf, relation_type = "triad_circle"):
     """
     Cohen-Marmoret cost (name still pending). Need a reference to be explained.
 
@@ -846,19 +948,24 @@ def cohen_marmoret_cost(chord_sequence, indexed_pattern, antecedents_with_pivots
         if this_elt_ant == []:
             raise err.PatternToDebugError("Element with no antecedent: {} in {}. This shouldn't happen a priori.".format(elt, indexed_pattern))
         elif (0,0) in this_elt_ant:
+            #print("la")
             if chord_sequence[0] != chord_sequence[elt]:
-                score += voice_leading_cost(chord_sequence[0], chord_sequence[elt])
+                score += score_relation_switcher(relation_type, chord_sequence[0], chord_sequence[elt])
         else:
+            #print("lab")
             # Searching for a valid implication of the current element.
             if len(this_elt_ant) == 1:
+                #print("1ant")
                 ant, piv = this_elt_ant[0]
-                rel = mvt.triadic_mvt_chords(chord_sequence[0], chord_sequence[ant])
-                fictive = mvt.apply_triadic_mvt(chord_sequence[piv], rel)
-                contrast = mvt.triadic_mvt_chords(fictive, chord_sequence[elt])
+                rel = find_relation_switcher(relation_type, chord_sequence[0], chord_sequence[ant])
+                fictive = apply_relation_switcher(relation_type, chord_sequence[piv], rel)
+                contrast = find_relation_switcher(relation_type, fictive, chord_sequence[elt])
 
             elif len(this_elt_ant) == 0:
                 raise err.PatternToDebugError("Element with no antecedent: {}, antecedents and pivots for it: {} in {}. This shouldn't happen a priori.".format(elt, this_elt_ant, indexed_pattern))
             else:
+                #print("Several ant")
+
                 contrasts_of_ants = []
                 possible_fictive = []
                 for ant, piv in this_elt_ant:
@@ -866,38 +973,100 @@ def cohen_marmoret_cost(chord_sequence, indexed_pattern, antecedents_with_pivots
                         raise err.PatternToDebugError("Contrast for the element: {}, hasn't been computed when looping for element: {} in {}. This shouldn't happen a priori.".format(ant, elt, indexed_pattern))
                     else:
                         contrasts_of_ants.append(contrasts[ant])
-                        rel = mvt.triadic_mvt_chords(chord_sequence[0], chord_sequence[ant])
-                        fictive = mvt.apply_triadic_mvt(chord_sequence[piv], rel)
+                        rel = find_relation_switcher(relation_type, chord_sequence[0], chord_sequence[ant])
+                        fictive = apply_relation_switcher(relation_type, chord_sequence[piv], rel)
                         possible_fictive.append(fictive)
 
                 if len(np.unique(possible_fictive)) == 1: # No ambiguity
-                    contrast = mvt.triadic_mvt_chords(possible_fictive[0], chord_sequence[elt])
+                    #print("No amb")
+
+                    contrast = find_relation_switcher(relation_type, possible_fictive[0], chord_sequence[elt])
                 else:
                     the_max = -1
                     maximal_contrastic_ants = None
                     for idx in range(len(contrasts_of_ants)): # Looping among the antecedents of our current element, and searching for the maximally contrastic one. If they are several, we will evaluate them all.
-                        absolute_val_contrast = mvt.l1_norm(contrasts_of_ants[idx])
-                        if absolute_val_contrast > the_max: # Higher contrast than the previous ones.
-                            the_max = absolute_val_contrast
+                        #print("La la ouais")
+
+                        score_contrast = score_one_relation_switcher(relation_type, contrasts_of_ants[idx])
+                        if score_contrast > the_max: # Higher contrast than the previous ones.
+                            the_max = score_contrast
                             maximal_contrastic_ants = [idx]
-                        elif absolute_val_contrast == the_max: # Contrast equal to the max, to evaluate.
+                        elif score_contrast == the_max: # Contrast equal to the max, to evaluate.
                             maximal_contrastic_ants.append(idx)
                             
-                    min_contrast_among_valids = 13 # Careful: if the norm changes, this bounds has too!!!
+                    min_contrast_among_valids = math.inf # Careful: if the norm changes, this bounds has too!!!
                     for ant in maximal_contrastic_ants: # Happens that all contrasts are equal, but that they result in different fictive. In that case, we keep the minimal contrast.
-                        current_contrast = mvt.triadic_mvt_chords(possible_fictive[ant], chord_sequence[elt])
-                        if mvt.l1_norm(current_contrast) < mvt.l1_norm(min_contrast_among_valids):
+                        #print("Raise marche pas")
+
+                        current_contrast = find_relation_switcher(relation_type, possible_fictive[ant], chord_sequence[elt])
+                        if score_one_relation_switcher(relation_type, current_contrast) < score_one_relation_switcher(relation_type, min_contrast_among_valids):
                             min_contrast_among_valids = current_contrast
+                    if min_contrast_among_valids == math.inf:
+                        raise NotImplementedError("Infinite contrast")
                     contrast = min_contrast_among_valids
                     
             contrasts[elt] = contrast
-            score += mvt.l1_norm(contrast)
+            score += score_one_relation_switcher(relation_type, contrast)
 
     return score
 
 
+# %% Relation system
+def find_relation_switcher(relation_type, chord_1, chord_2):
+    if relation_type == "triad_circle":
+        return tt.triadic_mvt_triads(chord_1, chord_2)
+    elif relation_type == "chromatic_circle":
+        return acc_pc.accelerated_chromatic_mvt_triads(chord_1, chord_2)
+    elif relation_type == "3_5_torus":
+        return tt.three_five_torus_mvt_triads(chord_1, chord_2)
+    elif relation_type == "tonnetz":
+        return acc_pc.accelerated_triadic_tonnetz_relation_symbol(chord_1, chord_2)
+    elif relation_type == "voice_leading":
+        return acc_pc.accelerated_get_voice_leading_transformation_symbol(chord_1, chord_2)
+    else:
+        raise err.InvalidArgumentValueException(f"Invalid relation_type: {relation_type}")
+    
+def apply_relation_switcher(relation_type, chord_1, relation):
+    if relation_type == "triad_circle":
+        return tt.apply_triadic_mvt(chord_1, relation)
+    elif relation_type == "tonnetz":
+        return acc_pc.accelerated_apply_triadic_tonnetz_relation_symbol(chord_1, relation)
+    elif relation_type == "voice_leading":
+        raise NotImplementedError("TODO")
+    else:
+        raise err.InvalidArgumentValueException(f"Invalid relation_type: {relation_type}")
+        
+def score_relation_switcher(relation_type, chord_1, chord_2):
+    if relation_type == "triad_circle":
+        return abs(tt.triadic_mvt_triads(chord_1, chord_2))
+    elif relation_type == "chromatic_circle":
+        return abs(tt.chromatic_mvt_triads(chord_1, chord_2))
+    elif relation_type == "3_5_torus":
+        return abs(tt.three_five_torus_mvt_triads(chord_1, chord_2))
+    elif relation_type == "tonnetz":
+        return acc_pc.accelerated_triadic_tonnetz_distance_symbol(chord_1, chord_2)
+    elif relation_type == "voice_leading":
+        return tt.get_voice_leading_distance_symbol(chord_1, chord_2)
+        raise NotImplementedError("TODO")
+    else:
+        raise err.InvalidArgumentValueException(f"Invalid relation_type: {relation_type}")
+        
+def score_one_relation_switcher(relation_type, rel):
+    if rel == math.inf:
+        return math.inf
+    if relation_type == "triad_circle":
+        return abs(rel)
+    elif relation_type == "tonnetz":
+        if rel == 0:
+            return 0
+        return len(rel)
+    elif relation_type == "voice_leading":
+        raise NotImplementedError("TODO")
+    else:
+        raise err.InvalidArgumentValueException(f"Invalid relation_type: {relation_type}")
+
 # %% Sequential score
-def sequential_score(chord_flow, penalty):
+def sequential_score(chord_flow, penalty, relation_type = "triad_circle"):
     """
     Sequential score for this sequence (score where relations are taken in the chronological order, useful as a baseline).
 
@@ -916,7 +1085,7 @@ def sequential_score(chord_flow, penalty):
     """
     score = 0
     for two_chords in zip(chord_flow[:-1], chord_flow[1:]):
-        score += voice_leading_cost(two_chords[0], two_chords[1])
+        score += score_relation_switcher(relation_type, two_chords[0], two_chords[1])
     return score + penalty
 
 # %% Penalties form irregularities in polytopes

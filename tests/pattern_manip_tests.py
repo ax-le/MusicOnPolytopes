@@ -19,18 +19,18 @@ class PatternManipulationTests(unittest.TestCase):
     def test_indexing_on_examples(self):
         pattern = pf.make_indexed_pattern(4, adding_code = [0,1,0,1], deleting_code = [0,0,1,0])
         # pattern = [[[[0, 1], [2, 3]], [[4, 5], [6, 7]]], [[[8, 9], [(10, 11), (12, 13)]], [[14], [(15, 16)]]]] 
-        self.assertEqual(pm.get_index_of_element(2, pattern), [0, 0, 1, 0])
-        self.assertEqual(pm.get_index_of_element(6, pattern), [0, 1, 1, 0])
-        self.assertEqual(pm.get_index_of_element(13, pattern), [1,0,1,(1,1)])
-        self.assertEqual(pm.get_index_of_element(13, pattern), [1, 1, 0, 0])
+        self.assertEqual(pm.get_index_from_element(2, pattern), [0, 0, 1, 0])
+        self.assertEqual(pm.get_index_from_element(6, pattern), [0, 1, 1, 0])
+        self.assertEqual(pm.get_index_from_element(13, pattern), [1,0,1,(1,1)])
+        self.assertEqual(pm.get_index_from_element(13, pattern), [1, 1, 0, 0])
         
     def test_indexing_on_examples(self):
         pattern = pf.make_indexed_pattern(4, adding_code = [0,1,0,1], deleting_code = [0,0,1,0])
         # pattern = [[[[0, 1], [2, 3]], [[4, 5], [6, 7]]], [[[8, 9], [(10, 11), (12, 13)]], [[14], [(15, 16)]]]] 
-        self.assertEqual(pm.get_element_with_index([0, 0, 1, 1], pattern), 3)
-        self.assertEqual(pm.get_element_with_index([0, 1, 0, 0], pattern), 4)
-        self.assertIsNone(pm.get_element_with_index([0,0,1,(1,1)], pattern))
-        self.assertEqual(pm.get_element_with_index([1, 1, 1, (0, 0)], pattern), 15)
+        self.assertEqual(pm.get_element_from_index([0, 0, 1, 1], pattern), 3)
+        self.assertEqual(pm.get_element_from_index([0, 1, 0, 0], pattern), 4)
+        self.assertIsNone(pm.get_element_from_index([0,0,1,(1,1)], pattern))
+        self.assertEqual(pm.get_element_from_index([1, 1, 1, (0, 0)], pattern), 15)
 
     def test_indexing_and_retrieving_from_index(self):
         for size in range(2, 70):
@@ -38,8 +38,8 @@ class PatternManipulationTests(unittest.TestCase):
             for add, dele in pf.get_codes(size):
                 pattern = pf.make_indexed_pattern(dim, adding_code = add, deleting_code = dele, starting_index = 0)
                 for i in range(0,pf.get_pattern_size(pattern)):
-                    idx_elt = pm.get_index_of_element(i, pattern)
-                    self.assertEqual(i, pm.get_element_with_index(idx_elt, pattern))
+                    idx_elt = pm.get_index_from_element(i, pattern)
+                    self.assertEqual(i, pm.get_element_from_index(idx_elt, pattern))
                     
     def test_delete_tuples(self):
         self.assertEqual(pm.delete_tuples([0, 1, 0, 0]), [0, 1, 0, 0])
@@ -61,16 +61,16 @@ class PatternManipulationTests(unittest.TestCase):
     def test_some_antecedents_ground_truth(self):
         pattern = pf.make_indexed_pattern(4, adding_code = [0,1,0,1], deleting_code = [0,0,1,0])
         # pattern = [[[[0, 1], [2, 3]], [[4, 5], [6, 7]]], [[[8, 9], [(10, 11), (12, 13)]], [[14], [(15, 16)]]]]
-        elt_idx = pm.get_index_of_element(5, pattern)
-        for ant in pm.get_antecedents_from_idx(elt_idx, pattern):
+        elt_idx = pm.get_index_from_element(5, pattern)
+        for ant in pm.get_antecedents_from_index(elt_idx, pattern):
             self.assertTrue(ant in [1,4])
             
-        elt_idx = pm.get_index_of_element(10, pattern)
-        for ant in pm.get_antecedents_from_idx(elt_idx, pattern):
+        elt_idx = pm.get_index_from_element(10, pattern)
+        for ant in pm.get_antecedents_from_index(elt_idx, pattern):
             self.assertTrue(ant in [2,8])
             
-        elt_idx = pm.get_index_of_element(13, pattern)
-        for ant in pm.get_antecedents_from_idx(elt_idx, pattern):
+        elt_idx = pm.get_index_from_element(13, pattern)
+        for ant in pm.get_antecedents_from_index(elt_idx, pattern):
             self.assertTrue(ant in [11,12])
                     
     def test_no_antecedent_is_none(self):
@@ -79,24 +79,24 @@ class PatternManipulationTests(unittest.TestCase):
             for add, dele in pf.get_codes(size):
                 pattern = pf.make_indexed_pattern(dim, adding_code = add, deleting_code = dele, starting_index = 0)
                 for i in range(1,pf.get_pattern_size(pattern)):
-                    idx_elt = pm.get_index_of_element(i, pattern)
-                    ant = pm.get_antecedents_from_idx(idx_elt, pattern)
+                    idx_elt = pm.get_index_from_element(i, pattern)
+                    ant = pm.get_antecedents_from_index(idx_elt, pattern)
                     self.assertNotEqual(ant, None)
                     
     def test_some_pivot_ground_truth(self):
         pattern = pf.make_indexed_pattern(4, adding_code = [0,1,0,1], deleting_code = [0,0,1,0])
         # pattern = [[[[0, 1], [2, 3]], [[4, 5], [6, 7]]], [[[8, 9], [(10, 11), (12, 13)]], [[14], [(15, 16)]]]]
-        elt_idx = pm.get_index_of_element(5, pattern)
-        ant_idx = pm.get_index_of_element(1, pattern)
-        self.assertEqual(pm.get_pivot_idx_from_idx(elt_idx, ant_idx), [0, 1, 0, 0])
+        elt_idx = pm.get_index_from_element(5, pattern)
+        ant_idx = pm.get_index_from_element(1, pattern)
+        self.assertEqual(pm.get_pivot_index_from_index(elt_idx, ant_idx), [0, 1, 0, 0])
             
-        elt_idx = pm.get_index_of_element(10, pattern)
-        ant_idx = pm.get_index_of_element(2, pattern)
-        self.assertEqual(pm.get_pivot_idx_from_idx(elt_idx, ant_idx), [1, 0, 0, 0])
+        elt_idx = pm.get_index_from_element(10, pattern)
+        ant_idx = pm.get_index_from_element(2, pattern)
+        self.assertEqual(pm.get_pivot_index_from_index(elt_idx, ant_idx), [1, 0, 0, 0])
             
-        elt_idx = pm.get_index_of_element(13, pattern)
-        ant_idx = pm.get_index_of_element(12, pattern)
-        self.assertEqual(pm.get_pivot_idx_from_idx(elt_idx, ant_idx), [0, 0, 0, 0])
+        elt_idx = pm.get_index_from_element(13, pattern)
+        ant_idx = pm.get_index_from_element(12, pattern)
+        self.assertEqual(pm.get_pivot_index_from_index(elt_idx, ant_idx), [0, 0, 0, 0])
                     
     def test_no_pivot_is_none(self):
         for size in range(2, 70):
@@ -104,24 +104,24 @@ class PatternManipulationTests(unittest.TestCase):
             for add, dele in pf.get_codes(size):
                 pattern = pf.make_indexed_pattern(dim, adding_code = add, deleting_code = dele, starting_index = 0)
                 for i in range(1,pf.get_pattern_size(pattern)):
-                    idx_elt = pm.get_index_of_element(i, pattern)
-                    ants_idx = pm.get_antecedents_idx_from_idx(idx_elt)
+                    idx_elt = pm.get_index_from_element(i, pattern)
+                    ants_idx = pm.get_antecedents_index_from_index(idx_elt)
                     for ant_idx in ants_idx:
-                        self.assertNotEqual(pm.get_pivot_idx_from_idx(idx_elt, ant_idx), None)
+                        self.assertNotEqual(pm.get_pivot_index_from_index(idx_elt, ant_idx), None)
             
     def test_some_successors_ground_truth(self):
         pattern = pf.make_indexed_pattern(4, adding_code = [0,1,0,1], deleting_code = [0,0,1,0])
         # pattern = [[[[0, 1], [2, 3]], [[4, 5], [6, 7]]], [[[8, 9], [(10, 11), (12, 13)]], [[14], [(15, 16)]]]]
-        elt_idx = pm.get_index_of_element(5, pattern)
-        self.assertEqual(pm.get_successors_from_idx(elt_idx, pattern), [7])
+        elt_idx = pm.get_index_from_element(5, pattern)
+        self.assertEqual(pm.get_successors_from_index(elt_idx, pattern), [7])
 
             
-        elt_idx = pm.get_index_of_element(10, pattern)
-        for suc in pm.get_successors_from_idx(elt_idx, pattern):
+        elt_idx = pm.get_index_from_element(10, pattern)
+        for suc in pm.get_successors_from_index(elt_idx, pattern):
             self.assertTrue(suc in [11,12,15])
             
-        elt_idx = pm.get_index_of_element(13, pattern)
-        self.assertEqual(pm.get_successors_from_idx(elt_idx, pattern), [])
+        elt_idx = pm.get_index_from_element(13, pattern)
+        self.assertEqual(pm.get_successors_from_index(elt_idx, pattern), [])
          
     def test_no_error_when_computing_successors(self):
         for size in range(2, 70):
@@ -129,8 +129,8 @@ class PatternManipulationTests(unittest.TestCase):
             for add, dele in pf.get_codes(size):
                 pattern = pf.make_indexed_pattern(dim, adding_code = add, deleting_code = dele, starting_index = 0)
                 for i in range(0,pf.get_pattern_size(pattern)):
-                    idx_elt = pm.get_index_of_element(i, pattern)
-                    suc = pm.get_successors_from_idx(idx_elt, pattern)
+                    idx_elt = pm.get_index_from_element(i, pattern)
+                    suc = pm.get_successors_from_index(idx_elt, pattern)
                     
                     
     def test_successors_and_antecedents_are_equivalent(self):

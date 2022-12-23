@@ -7,6 +7,9 @@ Created on Mon Dec  9 11:06:19 2019
 class InvalidArgumentValueException(BaseException): pass
 class OutdatedBehaviorException(BaseException): pass
 
+class TriadException(BaseException): pass
+class NotAMajMinTriadException(TriadException): pass
+
 class NoteException(BaseException): pass
 class InvalidNoteException(NoteException): pass
 class InvalidNoteNumberException(InvalidNoteException): pass

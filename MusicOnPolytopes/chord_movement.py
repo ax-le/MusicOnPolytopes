@@ -183,7 +183,7 @@ def apply_triadic_mvt(chord, mvt, chromatic = True):
         The new chord, after applying the relation.
 
     """
-    circle = dm.get_circle_of_triads(flat = True, chromatic = chromatic)
+    circle = dm.get_circle_of_triads(flat = False, chromatic = chromatic)
     idx = get_triadic_position(chord, chromatic = chromatic)
     return circle[(idx + mvt)%24]
 

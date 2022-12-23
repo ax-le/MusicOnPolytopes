@@ -26,6 +26,8 @@ persisted_content
 #Dump
 DoNotPush
 */DoNotPush/*
+guichaoua_pc_costs
+*/guichaoua_pc_costs/*
 
 #Baseline folders, do not need to be pushed (code duplication)
 Baselines

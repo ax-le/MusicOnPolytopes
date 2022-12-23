@@ -54,7 +54,7 @@ def get_circle_of_triads(flat = True, chromatic = True):
     #     if flat:
     #         return ['C','Fm','Db','Gbm','D','Gm','Eb','Abm','E','Am','F','Bbm','Gb','Bm','G','Cm','Ab','Dbm','A','Dm','Bb','Ebm','B','Em']
     #     else:
-    #         return ['C','Fm','C#','F#m','D','Gm','D#','G#m','E','Am','F','A#m','F#','Bm','G','Cm','G#','C#m','A','Cm','A#','D#m','B','Em'] 
+    #         return ['C','Fm','C#','F#m','D','Gm','D#','G#m','E','Am','F','A#m','F#','Bm','G','Cm','G#','C#m','A','Dm','A#','D#m','B','Em'] 
 
 # %% Read and treat inputs
 def get_piano_roll(path, hop_length_seconds, threshold_offset = None):
@@ -477,13 +477,18 @@ def flowify_song(path):
                     try:
                         bag_of_chords.append(bag_of_chords[-1])
                     except IndexError:
-                        if len(np.unique(chords)) == 1:
-                            raise NotImplementedError("Song is only composed of silence, to check the origianl file at {}".format(path))
+                        if len(np.unique(chords)) == 1 or (len(np.unique(chords)) == 2 and '' in np.unique(chords)):
+                            raise NotImplementedError("Song is only composed of silence, to check the original file at {}".format(path))
                         else:
                             for i in chords:
                                 if i != "N":
-                                    bag_of_chords.append(Chord(i))
-                                    break
+                                    try:
+                                        Chord(i)
+                                        bag_of_chords.append(Chord(i))
+                                        break
+                                    except err.InvalidChordNotesException:
+                                        raise NotImplementedError(f"Chord '{i}' have cause failure, on line: {line}")
+                                        
     return bag_of_chords
 
 def frontiers_to_chord_sequence(flow, frontiers):
